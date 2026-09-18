@@ -31,6 +31,7 @@ Safety posture
 from __future__ import annotations
 
 import threading
+import time
 from typing import Optional
 
 import numpy as np
@@ -79,6 +80,10 @@ class ArmVlaNode(Node):
         self.declare_parameter("zmq.enabled", False)
         self.declare_parameter("zmq.dry_run", True)
         self.declare_parameter("zmq.sndhwm", 2)
+        # Clock used for the frame timestamp. "monotonic" (default) is immune to
+        # ROS time: use_sim_time or a /clock publisher can jump the ROS clock
+        # BACKWARDS, which would make the receiver reject frames as stale.
+        self.declare_parameter("zmq.timestamp_source", "monotonic")
 
         # ik solver
         self.declare_parameter("ik.position_weight", 200.0)
@@ -169,6 +174,14 @@ class ArmVlaNode(Node):
         self._last_result: Optional[IKResult] = None
         self._last_success: Optional[IKResult] = None
         self._last_frame_payload = b""
+        self._timestamp_source = str(
+            self.get_parameter("zmq.timestamp_source").value
+        ).lower()
+        if self._timestamp_source not in ("monotonic", "ros"):
+            raise ValueError(
+                f"zmq.timestamp_source must be 'monotonic' or 'ros', "
+                f"got {self._timestamp_source!r}"
+            )
         self._solve_lock = threading.Lock()
 
         self.cb_group = ReentrantCallbackGroup()
@@ -328,6 +341,24 @@ class ArmVlaNode(Node):
 
     # ------------------------------------------------------------------ send
 
+    def _frame_timestamp(self) -> float:
+        """Timestamp for the outgoing frame.
+
+        The receiver uses it for exactly one thing: a strictly-increasing gate
+        (`timestamp <= previous->timestamp` -> "stale timestamp", frame dropped).
+        Its *magnitude* is irrelevant, because freshness is measured from the
+        receiver's own arrival time (`out.received = steady_clock::now()` right
+        after parsing, compared against the FSM thread's `steady_seconds()`), so
+        the two clocks never have to agree.
+
+        That leaves only "must never go backwards" to guarantee, which is why the
+        default is a monotonic clock rather than the ROS clock: `use_sim_time`
+        or a `/clock` publisher can step the ROS clock backwards mid-run.
+        """
+        if self._timestamp_source == "ros":
+            return self.get_clock().now().nanoseconds * 1e-9
+        return time.monotonic()
+
     def _on_tick(self) -> None:
         # Transmit the last CONVERGED pose, not the last attempt. A failed solve
         # must not blank out a target that is still valid -- the arm should keep
@@ -352,9 +383,8 @@ class ArmVlaNode(Node):
         frame.set_arm(self.side, res.q)
         frame.velocity = self._current_velocity()
 
-        now = self.get_clock().now().nanoseconds * 1e-9
         try:
-            payload = frame.to_payload(frame.next_timestamp(now))
+            payload = frame.to_payload(frame.next_timestamp(self._frame_timestamp()))
         except FrameError as exc:
             # Our own guard caught something the receiver would reject. Better to
             # drop one frame than to have the whole stream rejected as invalid.

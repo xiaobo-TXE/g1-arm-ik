@@ -46,8 +46,9 @@ def _check(cond, msg):
 class AlgoReplica:
     """Mirrors g1_arm_vla_node's target/velocity bookkeeping."""
 
-    def __init__(self, velocity_timeout: float = 0.3):
+    def __init__(self, velocity_timeout: float = 0.3, timestamp_source: str = "monotonic"):
         self.velocity_timeout = velocity_timeout
+        self.timestamp_source = timestamp_source
         self.last_result = None   # last ATTEMPT
         self.last_success = None  # last CONVERGED pose (what gets sent)
         self.velocity = VelocityCommand()
@@ -66,6 +67,12 @@ class AlgoReplica:
     def on_velocity(self, msg_vx, msg_vy, msg_wz, now):
         self.velocity = VelocityCommand(vx=msg_vx, vy=msg_vy, wz=msg_wz)
         self.velocity_time = now
+
+    def frame_timestamp(self, ros_now: float = 0.0, mono_now: float = 0.0) -> float:
+        """Mirrors _frame_timestamp."""
+        if self.timestamp_source == "ros":
+            return ros_now
+        return mono_now
 
     def current_velocity(self, now):
         """Mirrors _current_velocity: pass through, or zeros once stale."""
@@ -219,7 +226,24 @@ def test_replica_still_matches_node():
         "velocity_timeout" in cv_src and "VelocityCommand()" in cv_src,
         "_current_velocity no longer falls back to zeros when stale",
     )
-    print("  node still contains the three constructs this file mirrors")
+    # 4. the frame timestamp must come from the monotonic clock by default, and
+    #    _on_tick must go through the helper rather than the ROS clock
+    ft = next(
+        (n for n in ast.walk(tree)
+         if isinstance(n, ast.FunctionDef) and n.name == "_frame_timestamp"),
+        None,
+    )
+    _check(ft is not None, "_frame_timestamp disappeared")
+    ft_src = ast.get_source_segment(src, ft)
+    _check(
+        "time.monotonic()" in ft_src,
+        "_frame_timestamp no longer defaults to a monotonic clock",
+    )
+    _check(
+        "self._frame_timestamp()" in tick_src,
+        "_on_tick no longer uses _frame_timestamp; it may be back on the ROS clock",
+    )
+    print("  node still contains the four constructs this file mirrors")
 
 
 
@@ -310,6 +334,46 @@ def test_node_decision_chain_with_real_ik():
     print("  velocity expired to zeros on the wire")
 
 
+def test_frame_timestamp_is_a_monotonic_gate():
+    """The frame timestamp only has to strictly increase -- nothing else.
+
+    Read from the C++ receiver: the timestamp is used for exactly one check
+    (`timestamp <= previous->timestamp` -> "stale timestamp"), while freshness
+    comes from the receiver's own arrival time. So the value may be any
+    monotonic sequence, and the node must never let it step backwards.
+    """
+    rep = AlgoReplica(timestamp_source="monotonic")
+
+    # a monotonic source that stands still (coarse clock) must be repaired
+    stamps = []
+    last = None
+    for i in range(6):
+        ts = rep.frame_timestamp(mono_now=42.0)  # frozen clock
+        if last is not None and ts <= last:
+            ts = last + 1e-6
+        stamps.append(ts)
+        last = ts
+    _check(all(b > a for a, b in zip(stamps, stamps[1:])), f"not increasing: {stamps}")
+
+    # the ROS clock stepping BACKWARDS is what we are defending against
+    ros_backwards = [100.0, 99.5, 98.0]
+    rep_ros = AlgoReplica(timestamp_source="ros")
+    got = [rep_ros.frame_timestamp(ros_now=t) for t in ros_backwards]
+    _check(got == ros_backwards, "ros source should pass the value through unchanged")
+    _check(not all(b > a for a, b in zip(got, got[1:])), "ros clock did step backwards")
+
+    # ...and the monotonic source is immune to it
+    rep_mono = AlgoReplica(timestamp_source="monotonic")
+    real_ros = [100.0, 99.5, 98.0]
+    real_mono = [10.0, 10.02, 10.04]
+    got2 = [rep_mono.frame_timestamp(ros_now=r, mono_now=m)
+            for r, m in zip(real_ros, real_mono)]
+    _check(all(b > a for a, b in zip(got2, got2[1:])),
+           f"monotonic source followed the ROS clock backwards: {got2}")
+    print(f"  monotonic immune to a backwards ROS clock: {got2}")
+    print(f"  frozen clock repaired: {stamps}")
+
+
 TESTS = [
     ("4.failed_solve_keeps_pose", test_failed_solve_keeps_the_commanded_pose),
     ("4.no_command_without_success", test_never_commands_without_any_success),
@@ -317,6 +381,7 @@ TESTS = [
     ("4.velocity_timeout_zero", test_velocity_timeout_zero_means_never_expire),
     ("4.replica_matches_node", test_replica_still_matches_node),
     ("4.real_ik_through_node_logic", test_node_decision_chain_with_real_ik),
+    ("4.frame_timestamp_monotonic", test_frame_timestamp_is_a_monotonic_gate),
 ]
 
 

@@ -38,6 +38,12 @@ g1_arm_vla_node:
       enabled: false            # start SILENT
       dry_run: true             # start SILENT (no frames leave the process)
       sndhwm: 2
+      # Clock for the frame timestamp. The receiver only checks that it strictly
+      # increases; freshness is measured from ITS OWN arrival time, so the two
+      # clocks never need to agree. Keep "monotonic" -- "ros" can step backwards
+      # under use_sim_time or a /clock publisher, and a backwards step gets the
+      # frame rejected as stale.
+      timestamp_source: monotonic
 
     # --- solver ---------------------------------------------------------
     default_pos_tol: 5.0e-4     # m; below this an IK result counts as reached

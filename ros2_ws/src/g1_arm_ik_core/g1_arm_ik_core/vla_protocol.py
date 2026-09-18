@@ -246,9 +246,20 @@ class VlaActionFrame:
     def next_timestamp(self, now: float) -> float:
         """Return a timestamp strictly greater than the previous one.
 
-        The receiver drops any frame whose timestamp is not strictly greater
-        than the last accepted one.  A monotonic clock can still hand out the
-        same value twice at high rates, so nudge forward when that happens.
+        The receiver uses the timestamp for exactly ONE thing
+        (`RemoteCommandReceiver.h:47`):
+
+            if (previous && timestamp <= previous->timestamp) fail("stale timestamp")
+
+        Its magnitude is irrelevant.  Freshness is measured from the receiver's
+        own arrival time -- `out.received = steady_clock::now()` right after
+        parsing (line 79), compared against the FSM thread's `steady_seconds()`
+        in `GrootModeManager::fresh()` -- so the sender's clock and the robot's
+        clock never have to agree.  The only requirement is "never goes
+        backwards", which is why `vla_node` feeds this a monotonic clock.
+
+        A monotonic clock can still hand out the same value twice at high rates,
+        so nudge forward when that happens.
         """
         ts = float(now)
         if not np.isfinite(ts):

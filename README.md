@@ -492,15 +492,22 @@ action:
   remote.ly: 0.0
   remote.rx: 0.0
   remote.ry: 0.0      # 未使用
-timestamp: 12345.67   # 严格递增
+timestamp: 12345.67   # 只需严格递增；数值大小无关
 ```
 
 | 约束 | 违反后果 |
 |---|---|
 | 必须恰好 14 个手臂关节 | 帧被丢 |
 | 值有限且 `\|q\| ≤ 3.2` | 帧被丢 |
-| timestamp 严格递增 | 帧被丢 |
+| timestamp 严格递增（数值本身无关） | 帧被丢 |
 | 发送间隔 < 0.3 s（`vla_timeout_`） | 速度被钳成 0（安全，但手臂 hold） |
+
+**关于 timestamp**：接收端只用它做一件事——严格递增门槛
+（`timestamp <= previous->timestamp` 判为 stale）。数值大小**完全无关**：新鲜度是拿
+**接收端自己**的到达时间算的（`out.received = steady_clock::now()`，与 FSM 线程的
+`steady_seconds()` 比较），所以发送端和机器人的时钟不需要对齐。因此节点默认用
+**单调时钟**而不是 ROS 时钟——`use_sim_time` 或 `/clock` 发布者会让 ROS 时钟倒退，
+而倒退一次就会被判 stale 丢帧。可用 `zmq.timestamp_source` 切换（`monotonic` / `ros`）。
 
 **腿部不在这条帧里。** 下肢由 Groot ONNX 策略本机推理驱动，
 `State_Groot::publish_targets()` 在 1 kHz 线程里把两者合并成一条 `LowCmd`。
