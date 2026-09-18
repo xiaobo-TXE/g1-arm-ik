@@ -1,0 +1,58 @@
+# Parameters for g1_arm_control_node.
+#
+# DEFAULTS ARE CHOSEN TO BE SAFE: the arm starts DISABLED and does nothing until
+# you call the `set_enabled` service. Read every value before going live.
+
+g1_arm_control_node:
+  ros__parameters:
+    side: left
+    urdf_path: ""               # empty = auto-discover
+
+    # --- ros plumbing ---------------------------------------------------
+    joint_state_topic: /g1/joint_states
+    target_topic: /g1/arm_ik/joint_target
+    command_topic: /g1/arm/command
+    status_topic: /g1/arm_control/status
+
+    # --- backend --------------------------------------------------------
+    # mock  : internal simulator, no hardware. Start here.
+    # topic : publish on command_topic (bridge it to your own DDS writer).
+    # dds   : write rt/arm_sdk directly via unitree_sdk2py.
+    backend: mock
+    control_rate: 100.0
+
+    # --- motion limits --------------------------------------------------
+    # Fraction of the URDF velocity limit we allow. 0.2 = 20%.
+    # Measured URDF limits: shoulder/elbow 37 rad/s, wrist pitch/yaw 22 rad/s.
+    velocity_scale: 0.2
+    # arm_sdk handover ramp. Never set these to 0.
+    ramp_up: 1.0
+    ramp_down: 1.0
+    # Reject a target farther than this from the current pose (rad).
+    max_joint_step: 1.0
+    # Watchdog: stop all motion if the state stream is older than this.
+    state_timeout: 0.5
+    # Low-pass on measured positions (0 = off).
+    state_alpha: 0.3
+    # Auto-disable if no target arrives for this long (0 = never).
+    target_timeout: 0.0
+    # Start engaged? Keep false unless you have a specific reason.
+    start_enabled: false
+
+    # --- dds backend ----------------------------------------------------
+    dds:
+      network_interface: eth0   # <-- CHANGE to your interface (ip link)
+      topic: rt/arm_sdk
+      # Unitree's arm_sdk convention: the second-to-last motor command carries
+      # the weight. VERIFY against the official example for your firmware.
+      weight_index: -2
+      domain_id: 0
+      # true = build and validate everything but never touch DDS.
+      dry_run: false
+
+    # --- mock backend ---------------------------------------------------
+    mock:
+      tau: 0.05
+      # Plain decimal on purpose: PyYAML (YAML 1.1) parses `1.0e5` and `1e-5`
+      # as STRINGS, which rclpy then rejects as a type mismatch.
+      noise: 0.00001

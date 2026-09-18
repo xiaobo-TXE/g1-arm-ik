@@ -1,0 +1,30 @@
+# ---- generated at runtime -------------------------------------------------
+# reduced_arm_urdf() writes a derived URDF next to its source when no explicit
+# output path is given (the ROS nodes pass an explicit /tmp path instead).
+**/*__*_arm_reduced.urdf
+*.orig
+
+# ---- macOS ----------------------------------------------------------------
+.DS_Store
+
+# ---- python ---------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# ---- colcon / ros --------------------------------------------------------
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# ---- local toolchain ------------------------------------------------------
+# The whole tools/ tree is machine-local: uv binaries (~35 MB), a downloaded
+# CPython (~400 MB) and the uv cache. Rebuild it with tools/setup_toolchain.sh
+# (or just use your own Python >= 3.10 + pip install -r requirements.txt).
+.venv/
+.venv312/
+tools/
+
+# ---- meshes are fetched on demand (110 MB), never committed --------------
+ros2_ws/src/g1_arm_bringup/meshes/

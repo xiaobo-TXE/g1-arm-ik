@@ -1,0 +1,36 @@
+# Parameters for g1_arm_ik_node.
+#
+# Loaded by launch/arm_ik.launch.py. Anything here can be overridden per launch
+# with `-p name:=value` or by passing your own file to the launch argument.
+
+g1_arm_ik_node:
+  ros__parameters:
+    # --- which arm ------------------------------------------------------
+    side: left                  # left | right
+
+    # --- model ----------------------------------------------------------
+    # Empty = auto-discover: g1_arm_bringup's installed urdf, or $G1_ARM_URDF.
+    urdf_path: ""
+    ik_base_link: torso_link
+    # Virtual TCP on <side>_wrist_yaw_link. CHANGE THIS to match your gripper,
+    # otherwise the IK is right and the grasp is wrong.
+    ee_offset: [0.05, 0.0, 0.0]
+
+    # --- ros plumbing ---------------------------------------------------
+    joint_state_topic: /g1/joint_states
+    publish_hz: 50.0
+    control_rate: 100.0
+
+    # --- solver ---------------------------------------------------------
+    default_pos_tol: 5.0e-4     # m; below this an IK result counts as reached
+    ik:
+      position_weight: 200.0
+      # Keep multistart on: IPOPT returns local minima and reports them as
+      # success (measured: 77 mm off target from a cold start, 80% of random
+      # seeds reach 0.0000 mm).
+      multistart: true
+      multistart_max_extra: 12
+      # Orientation is not commanded by default.
+      control_rotation: false
+      # Off by default for speed; raise to ~1e-3 if solutions pin to a limit.
+      limit_barrier_weight: 0.0

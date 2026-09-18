@@ -1,0 +1,48 @@
+# Parameters for g1_arm_vla_node -- IK solutions published as ZMQ VLA action frames.
+#
+# Adds ONE thing to the stack: end-effector target -> inverse kinematics ->
+# 14 arm joint targets -> YAML action frame on ZMQ 6002 -> Groot deploy (C++).
+#
+# The legs are NOT touched. In VLA mode the lower body is driven by the on-board
+# Groot ONNX policy; State_Groot::publish_targets() merges the leg targets with
+# the arm targets from this frame into a single LowCmd at 1 kHz.
+
+g1_arm_vla_node:
+  ros__parameters:
+    # --- which arm ------------------------------------------------------
+    side: left                  # left | right
+                                # The other arm is filled with its MEASURED
+                                # position, because the receiver requires all 14.
+
+    # --- model ----------------------------------------------------------
+    urdf_path: ""               # empty = auto-discover from g1_arm_bringup
+    ik_base_link: torso_link
+    # Virtual TCP on <side>_wrist_yaw_link. CHANGE THIS to match your gripper.
+    ee_offset: [0.05, 0.0, 0.0]
+
+    # --- ros plumbing ---------------------------------------------------
+    joint_state_topic: /g1/joint_states
+    # Pass-through velocity (option A): whatever the upstream VLA/nav publishes
+    # here is echoed into the frame as remote.lx/ly/rx. Zeros when stale, which
+    # makes the on-board policy pick its balance branch.
+    velocity_topic: /g1/vla/velocity
+    velocity_timeout: 0.3       # s; matches vla_timeout_ in GrootModeManager
+    control_rate: 50.0          # Hz; must stay well under velocity_timeout
+
+    # --- ZMQ transport --------------------------------------------------
+    zmq:
+      robot_ip: 192.168.123.222 # <-- CHANGE to the robot's address
+      port: 6002                # RemoteCommandReceiver's port
+      # Transport is gated twice: `enabled` is togglable at runtime via the
+      # `set_enabled` service, `dry_run` is a startup parameter.
+      enabled: false            # start SILENT
+      dry_run: true             # start SILENT (no frames leave the process)
+      sndhwm: 2
+
+    # --- solver ---------------------------------------------------------
+    default_pos_tol: 5.0e-4     # m; below this an IK result counts as reached
+    ik:
+      position_weight: 200.0
+      multistart: true          # keep on: IPOPT returns local minima as success
+      multistart_max_extra: 12
+      control_rotation: false   # VLA frames carry no orientation

@@ -1,0 +1,39 @@
+# Request: drive the arm's end effector to a target.
+#
+# Everything is expressed in the TORSO frame (torso_link), because that is the
+# frame the IK base is defined in. Use the node's `pelvis_target` topic if you
+# want to work in the pelvis frame instead -- it applies the waist transform
+# from /g1/joint_states for you.
+
+# Target position, metres, torso frame.
+float64 x
+float64 y
+float64 z
+
+# Optional orientation. Ignored unless the node was started with
+# control_rotation:=true (and orientation_weights set to non-zero).
+float64[9] orientation_row_major
+bool use_orientation
+
+# Optional starting configuration (7 values, in the order published by
+# g1_arm_ik_node/last_solution). Leave empty to use the node's warm start.
+float64[] q_seed
+bool use_q_seed
+---
+# True only if the solver converged AND the residual is inside pos_tol.
+bool success
+# |p_fk(q_solution) - p_target| in metres.
+float64 position_error
+# Rotation error in radians (0 when orientation is not controlled).
+float64 rotation_error
+# The 7 solved joint angles, same order as `joint_names` in the node's status.
+float64[7] q_solution
+# Minimum distance to a joint limit, radians. Small = fragile solution.
+float64 limit_margin
+# Solver iterations and wall time.
+int32 iterations
+float64 solve_time
+# Number of multi-start attempts (1 = the warm start succeeded).
+int32 attempts
+# Free-form solver status, e.g. "Solve_Succeeded".
+string status

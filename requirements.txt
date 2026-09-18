@@ -1,0 +1,18 @@
+# Python dependencies for g1_ik.
+#
+# Verified working combination (macOS arm64, Python 3.12.14):
+#   pin==4.1.0, casadi==3.8.1, numpy==2.5.3, PyYAML==6.0.3
+#
+# On Ubuntu 22.04 / Python 3.10 these also install from wheels.
+#
+# NOTE on Python version: `pip install pin` needs Python >= 3.10, because
+# pinocchio depends on the `coal` package which depends on `cmeel-assimp>=6.0.5`,
+# and that has no wheels for Python 3.9. On 3.9 pip tries to build it from source
+# and fails.
+pin>=3.9,<5
+casadi>=3.6
+numpy>=1.24
+PyYAML>=6.0
+
+# Optional: only needed to run the ROS 2 layer added later.
+# unitree-sdk2py

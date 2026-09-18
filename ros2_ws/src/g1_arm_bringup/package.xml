@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>g1_arm_bringup</name>
+  <version>0.1.0</version>
+  <description>
+    Integration layer for Unitree G1 single-arm control: the /lowstate ->
+    /g1/joint_states bridge, a TF broadcaster built on the verified FK, the URDF
+    assets, and the launch files.
+  </description>
+  <maintainer email="user@example.com">g1_arm maintainer</maintainer>
+  <license>BSD-3-Clause</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>g1_arm_ik_core</exec_depend>
+  <exec_depend>g1_arm_ik_node</exec_depend>
+  <exec_depend>g1_arm_control_node</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

@@ -1,0 +1,86 @@
+# g1_ik configuration -- one arm, position-only IK.
+#
+# All lengths in metres, all angles in radians.
+# See g1_ik/ik.py:IKConfig for the full list of fields and their meaning.
+
+# --- model -----------------------------------------------------------------
+urdf: urdf/g1_29dof_rev_1_0.urdf   # use g1_29dof_with_hand_rev_1_0.urdf if you have hands
+side: left                                 # left | right
+ik_base_link: torso_link                   # the waist is a rigid base
+
+# Virtual end-effector frame, placed on <side>_wrist_yaw_link.
+# Keep this in sync with your real gripper's TCP!
+ee_offset: [0.05, 0.0, 0.0]
+
+# --- waist -----------------------------------------------------------------
+# The waist is NOT solved. Its angles come from /lowstate and are used only to
+# convert targets between the pelvis frame and the torso frame:
+#     p_torso = T_pelvis_torso(waist_q)^-1 @ p_pelvis
+# Unitree publishes the waist in ascending motor-index order:
+waist_joint_order: [waist_yaw_joint, waist_roll_joint, waist_pitch_joint]
+# Fallback used only for offline testing when no robot state is available.
+waist_default: [0.0, 0.0, 0.0]
+
+# --- solver ----------------------------------------------------------------
+ik:
+  # Weight on ||p_fk - p_target||^2 (metres). This is the whole task.
+  position_weight: 200.0
+
+  # Orientation is NOT controlled. Set rotation_weight > 0 AND
+  # control_rotation: true if you also want to command orientation.
+  rotation_weight: 0.0
+  control_rotation: false
+
+  # --- posture regularisation: OFF on purpose, read this before enabling ---
+  # Adding sum(w_i * (q_i - q_ref_i)^2) to the objective makes IPOPT stall
+  # 0.5-15 mm short of the target, because on a 3-D task with 7 joints the
+  # posture and position objectives compete rather than nest. Posture is
+  # handled structurally instead:
+  #   * warm starting (each solve begins at the previous solution)
+  #   * ArmIK.nullspace_project(), which changes posture without moving the TCP
+  # See the module docstring of g1_ik/ik.py for the measurements.
+  posture_weight: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  posture_reference: null
+
+  # Only used by the optional stage 2 (`refine`).
+  smooth_weight: 0.5
+
+  # Log barrier keeping solutions away from the joint limits.
+  # 0 = off (fast). Raise to ~1e-3 if you see solutions pinned to a limit.
+  limit_barrier_weight: 0.0
+  limit_barrier_margin: 0.05
+
+  max_iter: 60
+  tol: 1.0e-5
+  acceptable_tol: 1.0e-4
+  print_level: 0             # set 5 to see IPOPT output while debugging
+
+  # --- multi-start fallback ---------------------------------------------
+  # IPOPT returns local minima and reports them as success. From a fixed seed
+  # some targets land on a joint limit 77 mm off target; retrying from other
+  # seeds fixes it for ~0.2 ms. Keep this on.
+  multistart: true
+  multistart_max_extra: 12
+  multistart_seed: 0
+
+  # --- acceptance thresholds -------------------------------------------
+  pos_tol: 5.0e-4            # m; |error| below this counts as "reached"
+  limit_margin_min: 0.0      # rad; require at least this much limit margin
+
+  # --- optional stage 2: position as a hard constraint + posture --------
+  # OFF, and expected to stay off: the posture optimum lies on the constraint
+  # boundary, where IPOPT cannot converge. Kept so the failure mode is
+  # reproducible.
+  refine: false
+  refine_pos_tol: 1.0e-4
+  refine_max_iter: 200
+  refine_smooth_weight: 0.1
+
+# --- output conditioning (used by your control loop, not by the solver) ----
+# The package ships RateLimiter and WeightedMovingFilter for this; see demo.py.
+output:
+  control_dt: 0.01           # s, assumed loop period (100 Hz)
+  moving_filter_weights: [0.4, 0.3, 0.2, 0.1]
+  # Per-joint velocity cap is taken from the URDF `velocity` field unless you
+  # override it here (rad/s).
+  max_velocity_override: null

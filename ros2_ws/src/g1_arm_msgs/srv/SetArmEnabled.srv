@@ -1,0 +1,6 @@
+# Uniform reply used by the control-affecting services.
+
+bool data
+---
+bool success
+string message
